@@ -17,19 +17,16 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact: MR_DDS_fixer-windows.exe
-            executable: MR_DDS_fixer.exe
+            executable: MR_DDS_fixer-windows.exe
 
           - os: ubuntu-latest
-            artifact: MR_DDS_fixer-linux
-            executable: MR_DDS_fixer
+            executable: MR_DDS_fixer-linux
 
           - os: macos-latest
-            artifact: MR_DDS_fixer-macos
-            executable: MR_DDS_fixer
+            executable: MR_DDS_fixer-macos
 
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -37,33 +34,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
 
       - name: Build executable
-        run: |
-          pyinstaller \
-            --onefile \
-            --name "${{ matrix.executable }}" \
-            MR_DDS_fixer.py
-
-      - name: Rename executable
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            mv "dist/${{ matrix.executable }}" "dist/${{ matrix.artifact }}"
-          else
-            mv "dist/${{ matrix.executable }}" "dist/${{ matrix.artifact }}"
-          fi
+        run: pyinstaller --onefile --name "${{ matrix.executable }}" MR_DDS_fixer.py
 
       - name: Upload executable to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.artifact }}
+          files: dist/${{ matrix.executable }}
