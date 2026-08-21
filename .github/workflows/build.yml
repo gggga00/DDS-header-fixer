@@ -1,29 +1,23 @@
-name: Build and Release
+name: Build executables
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to attach executables to"
+        required: true
+        default: "v1.0"
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            executable: MR_DDS_fixer-windows.exe
-
-          - os: ubuntu-latest
-            executable: MR_DDS_fixer-linux
-
-          - os: macos-latest
-            executable: MR_DDS_fixer-macos
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -38,9 +32,177 @@ jobs:
         run: python -m pip install pyinstaller
 
       - name: Build executable
-        run: pyinstaller --onefile --name "${{ matrix.executable }}" MR_DDS_fixer.py
+        run: pyinstaller --onefile --name MR_DDS_fixer-windows MR_DDS_fixer.py
 
-      - name: Upload executable to release
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/MR_DDS_fixer-windows.exe
+
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --name MR_DDS_fixer-linux MR_DDS_fixer.py
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/MR_DDS_fixer-linux
+
+
+  build-macos-intel:
+    name: Build macOS Intel
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --name MR_DDS_fixer-x86_64 MR_DDS_fixer.py
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel
+          path: dist/MR_DDS_fixer-x86_64
+
+
+  build-macos-arm64:
+    name: Build macOS Apple Silicon
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --name MR_DDS_fixer-arm64 MR_DDS_fixer.py
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: dist/MR_DDS_fixer-arm64
+
+
+  create-macos-universal:
+    name: Create macOS Universal
+    needs:
+      - build-macos-intel
+      - build-macos-arm64
+    runs-on: macos-14
+
+    steps:
+      - name: Download Intel build
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-intel
+          path: intel
+
+      - name: Download ARM64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64
+          path: arm64
+
+      - name: Create universal binary
+        run: |
+          lipo -create \
+            intel/MR_DDS_fixer-x86_64 \
+            arm64/MR_DDS_fixer-arm64 \
+            -output MR_DDS_fixer-macos
+
+      - name: Verify universal binary
+        run: |
+          file MR_DDS_fixer-macos
+          lipo -info MR_DDS_fixer-macos
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: MR_DDS_fixer-macos
+
+
+  release:
+    name: Attach executables to release
+    needs:
+      - build-windows
+      - build-linux
+      - create-macos-universal
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: release
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: release
+
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-universal
+          path: release
+
+      - name: Show release files
+        run: ls -lah release
+
+      - name: Attach executables to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.executable }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          files: |
+            release/MR_DDS_fixer-windows.exe
+            release/MR_DDS_fixer-linux
+            release/MR_DDS_fixer-macos
