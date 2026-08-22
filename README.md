@@ -1,6 +1,7 @@
 # How to use: 
 
 0. Download MR_DDS_fixer
+
 If you don't want to run the python script you can download the excutables from the releases.
 
 1. Put all dds files you want to 'fix' into the same folder as the script/executable
