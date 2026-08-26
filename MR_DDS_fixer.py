@@ -119,12 +119,12 @@ inputPath = "./"
 inp = Path(inputPath)
 files = inp.glob("*.dds")
 
-outputPath = "./"
+outputPath = "./fixed"
 out_dir = Path(outputPath)
 out_dir.mkdir(parents=True, exist_ok=True)
 
 for path in files:
-    out = Path(str(path.stem) + "_fixed").with_suffix(".dds")
+    out = out_dir / (path.stem + ".dds")
 
     data = path.read_bytes()
     _, _, _, fourcc, dxgi = parse_dds(data)
